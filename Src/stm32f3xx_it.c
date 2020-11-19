@@ -43,7 +43,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-
+uint8_t intensity = 99;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -202,14 +202,10 @@ void SysTick_Handler(void)
 /**
   * @brief This function handles TIM2 global interrupt.
   */
-void TIM2_IRQHandler(void) {
+void TIM2_IRQHandler(void)
+{
   /* USER CODE BEGIN TIM2_IRQn 0 */
-	static uint8_t intensity = 0;
-	static state led_state = DOWN;
-
 	if (LL_TIM_IsActiveFlag_UPDATE(TIM2)) {
-		led_state = setLedState(led_mode, led_state, intensity, intensity_set_point);
-		intensity = setIntensity(led_mode, led_state, intensity, intensity_set_point);
 		setDutyCycle(intensity);
 	}
 
@@ -218,6 +214,26 @@ void TIM2_IRQHandler(void) {
   /* USER CODE BEGIN TIM2_IRQn 1 */
 
   /* USER CODE END TIM2_IRQn 1 */
+}
+
+/**
+  * @brief This function handles TIM3 global interrupt.
+  */
+void TIM3_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM3_IRQn 0 */
+	static state led_state = DOWN;
+
+	if (LL_TIM_IsActiveFlag_UPDATE(TIM3)) {
+		led_state = setLedState(led_mode, led_state, intensity, intensity_set_point);
+		intensity = setIntensity(led_mode, led_state, intensity, intensity_set_point);
+	}
+
+	LL_TIM_ClearFlag_UPDATE(TIM3);
+  /* USER CODE END TIM3_IRQn 0 */
+  /* USER CODE BEGIN TIM3_IRQn 1 */
+
+  /* USER CODE END TIM3_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */
