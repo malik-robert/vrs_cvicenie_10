@@ -20,7 +20,9 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "dma.h"
 #include "tim.h"
+#include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -46,14 +48,19 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-mode led_mode = AUTO;
+mode 	led_mode 			= AUTO;
 uint8_t intensity_set_point = 99;
+
+int	count 		= 0;
+char counting 	= 0;
+char buffer[SIZE_BUFFER];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-
+void receive_dma_data(const uint8_t* data, uint16_t len);
+char string_compare(char* str1, char* str2, int len);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -94,14 +101,18 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   LL_TIM_CC_EnableChannel(TIM2, LL_TIM_CHANNEL_CH1);
   LL_TIM_EnableIT_UPDATE(TIM2);
   LL_TIM_EnableCounter(TIM2);
   LL_TIM_EnableIT_UPDATE(TIM3);
   LL_TIM_EnableCounter(TIM3);
+
+  USART2_RegisterCallback(receive_dma_data);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -109,7 +120,14 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-
+#if POLLING
+	//Polling for new data, no interrupts
+	USART2_CheckDmaReception();
+	LL_mDelay(10);
+#else
+	USART2_PutBuffer(tx_data, sizeof(tx_data));
+	LL_mDelay(1000);
+#endif
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -151,7 +169,62 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+void receive_dma_data(const uint8_t* data, uint16_t len)
+{
+    for(uint8_t i = 0; i < len; i++)
+    {
+    	if(data[i] == '$')
+    	{
+    		if(!counting)
+    		{
+    			counting = 1;
+    			count	= 0;
+    		}
+    		else
+    		{
+    			counting = 0;
+    			if(count == 4 && string_compare(buffer, "auto", 4))
+    			{
+    				led_mode = AUTO;
+    			}
+    			else if(count == 6 && string_compare(buffer, "manual", 6))
+    			{
+    				led_mode = MAN;
+    			}
+    			else if(count == 5 && led_mode == MAN && string_compare(buffer, "pwm", 3))
+    			{
+    				if(!('0' < buffer[3] < '9' && '0' < buffer[4] < '9'))
+    					continue;
 
+    				intensity_set_point = (buffer[3]-'0')*10 + (buffer[4]-'0');
+    			}
+    		}
+    	}
+    	else if(counting){
+    		buffer[count] = data[i];
+    		count++;
+
+    		if(SIZE_BUFFER <= count)
+    		{
+    			counting = 1;
+    		    count	= 0;
+    		}
+    	}
+
+    }
+}
+
+char string_compare(char* str1, char* str2, int len)
+{
+	for(int c = 0; c < len; c++)
+	{
+		if(str1[c] != str2[c]){
+			return 0;
+		}
+	}
+
+	return 1;
+}
 /* USER CODE END 4 */
 
 /**
