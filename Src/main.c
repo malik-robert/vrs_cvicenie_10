@@ -112,8 +112,6 @@ int main(void)
   LL_TIM_CC_EnableChannel(TIM2, LL_TIM_CHANNEL_CH1);
   LL_TIM_EnableIT_UPDATE(TIM2);
   LL_TIM_EnableCounter(TIM2);
-  LL_TIM_EnableIT_UPDATE(TIM3);
-  LL_TIM_EnableCounter(TIM3);
 
   USART2_RegisterCallback(receive_dma_data);
   /* USER CODE END 2 */
