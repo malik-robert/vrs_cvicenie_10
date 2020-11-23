@@ -28,6 +28,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "led.h"
+#include "usart.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -48,8 +49,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-mode 	led_mode 			= AUTO;
-uint8_t intensity_set_point = 99;
+mode led_mode = AUTO;
+int8_t intensity_set_point = 0;
 
 int	count 		= 0;
 char counting 	= 0;
@@ -59,8 +60,11 @@ char buffer[SIZE_BUFFER];
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-void receive_dma_data(const uint8_t* data, uint16_t len);
+void receive_dma_data(uint8_t* data, uint16_t len);
 char string_compare(char* str1, char* str2, int len);
+uint8_t length(char *str);
+void send_message(char *str, uint8_t len);
+void string_copy(uint8_t *str1, char *str2, uint8_t len);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -103,7 +107,6 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_TIM2_Init();
-  MX_TIM3_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   LL_TIM_CC_EnableChannel(TIM2, LL_TIM_CHANNEL_CH1);
@@ -120,14 +123,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-#if POLLING
-	//Polling for new data, no interrupts
-	USART2_CheckDmaReception();
-	LL_mDelay(10);
-#else
-	USART2_PutBuffer(tx_data, sizeof(tx_data));
-	LL_mDelay(1000);
-#endif
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -169,7 +165,7 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-void receive_dma_data(const uint8_t* data, uint16_t len)
+void receive_dma_data(uint8_t* data, uint16_t len)
 {
     for(uint8_t i = 0; i < len; i++)
     {
@@ -190,13 +186,13 @@ void receive_dma_data(const uint8_t* data, uint16_t len)
     			else if(count == 6 && string_compare(buffer, "manual", 6))
     			{
     				led_mode = MAN;
+    				intensity_set_point = -1;
     			}
     			else if(count == 5 && led_mode == MAN && string_compare(buffer, "pwm", 3))
     			{
-    				if(!('0' < buffer[3] < '9' && '0' < buffer[4] < '9'))
-    					continue;
-
-    				intensity_set_point = (buffer[3]-'0')*10 + (buffer[4]-'0');
+    				if ('0' <= buffer[3] && buffer[3] <= '9' && '0' <= buffer[4] && buffer[4]<= '9') {
+    					intensity_set_point = 10*(buffer[3] - '0') + (buffer[4] - '0');
+    				}
     			}
     		}
     	}
@@ -210,11 +206,11 @@ void receive_dma_data(const uint8_t* data, uint16_t len)
     		    count	= 0;
     		}
     	}
-
     }
 }
 
-char string_compare(char* str1, char* str2, int len)
+/* Funkcia porovnáva 2 reťazce. Reťazce musia mať rovnakú dĺžku. */
+char string_compare(char *str1, char *str2, int len)
 {
 	for(int c = 0; c < len; c++)
 	{
@@ -225,7 +221,6 @@ char string_compare(char* str1, char* str2, int len)
 
 	return 1;
 }
-/* USER CODE END 4 */
 
 /**
   * @brief  This function is executed in case of error occurrence.
