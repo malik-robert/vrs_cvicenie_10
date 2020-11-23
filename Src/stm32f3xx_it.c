@@ -24,6 +24,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "led.h"
+#include "usart.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,7 +44,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-uint8_t intensity = 99;
+uint8_t intensity = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -60,7 +61,7 @@ uint8_t intensity = 99;
 
 /* USER CODE BEGIN EV */
 extern mode led_mode;
-extern uint8_t intensity_set_point;
+extern int8_t intensity_set_point;
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -205,7 +206,16 @@ void SysTick_Handler(void)
 void DMA1_Channel6_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Channel6_IRQn 0 */
-
+	if(LL_DMA_IsActiveFlag_TC6(DMA1) == SET)
+	{
+		USART2_CheckDmaReception();
+		LL_DMA_ClearFlag_TC6(DMA1);
+	}
+	else if(LL_DMA_IsActiveFlag_HT6(DMA1) == SET)
+	{
+		USART2_CheckDmaReception();
+		LL_DMA_ClearFlag_HT6(DMA1);
+	}
   /* USER CODE END DMA1_Channel6_IRQn 0 */
 
   /* USER CODE BEGIN DMA1_Channel6_IRQn 1 */
@@ -219,7 +229,13 @@ void DMA1_Channel6_IRQHandler(void)
 void DMA1_Channel7_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Channel7_IRQn 0 */
+	if(LL_DMA_IsActiveFlag_TC7(DMA1) == SET)
+	{
+		LL_DMA_ClearFlag_TC7(DMA1);
 
+		while(LL_USART_IsActiveFlag_TC(USART2) == RESET);
+		LL_DMA_DisableChannel(DMA1, LL_DMA_CHANNEL_7);
+	}
   /* USER CODE END DMA1_Channel7_IRQn 0 */
 
   /* USER CODE BEGIN DMA1_Channel7_IRQn 1 */
@@ -233,7 +249,11 @@ void DMA1_Channel7_IRQHandler(void)
 void TIM2_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM2_IRQn 0 */
+	static state led_state = DOWN;
+
 	if (LL_TIM_IsActiveFlag_UPDATE(TIM2)) {
+		led_state = setLedState(led_mode, led_state, intensity, intensity_set_point);
+		intensity = setIntensity(led_mode, led_state, intensity, intensity_set_point);
 		setDutyCycle(intensity);
 	}
 
@@ -245,31 +265,16 @@ void TIM2_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles TIM3 global interrupt.
-  */
-void TIM3_IRQHandler(void)
-{
-  /* USER CODE BEGIN TIM3_IRQn 0 */
-	static state led_state = DOWN;
-
-	if (LL_TIM_IsActiveFlag_UPDATE(TIM3)) {
-		led_state = setLedState(led_mode, led_state, intensity, intensity_set_point);
-		intensity = setIntensity(led_mode, led_state, intensity, intensity_set_point);
-	}
-
-	LL_TIM_ClearFlag_UPDATE(TIM3);
-  /* USER CODE END TIM3_IRQn 0 */
-  /* USER CODE BEGIN TIM3_IRQn 1 */
-
-  /* USER CODE END TIM3_IRQn 1 */
-}
-
-/**
   * @brief This function handles USART2 global interrupt / USART2 wake-up interrupt through EXT line 26.
   */
 void USART2_IRQHandler(void)
 {
   /* USER CODE BEGIN USART2_IRQn 0 */
+	if(LL_USART_IsActiveFlag_IDLE(USART2))
+	{
+		USART2_CheckDmaReception();
+		LL_USART_ClearFlag_IDLE(USART2);
+	}
 
   /* USER CODE END USART2_IRQn 0 */
   /* USER CODE BEGIN USART2_IRQn 1 */
@@ -278,14 +283,35 @@ void USART2_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+/* Funkcia nastavuje striedu pre PWM časovača TIM2. */
 void setDutyCycle(uint8_t D) {
 	if (D >= PWM_MIN && D <= PWM_MAX) {
 		TIM2->CCR1 = (TIM2->ARR*D)/99u;
 	}
 }
 
-state setLedState(mode led_mode, state led_state, uint8_t intensity, uint8_t intensity_set_point) {
+/* Funkcia nastavuje zhasínanie (DOWN)
+ * alebo rozsvecovanie (UP) LED.
+ * Stav LED sa nastaví podľa módu ovládania,
+ * žiadanej hodnoty intenzity a ohraničenia
+ * minimálnej/maximálnej intenzity svietenia
+ *
+ * Vstupy:
+ * led_mode .............. mód ovládania {MAN, AUTO}
+ * led_state ............. predošlý stav {DOWN, UP}
+ * intensity ............. aktuálna intenzita svietenia
+ * intensity_set_point ... žiadaná hodnota intenzity svietenia */
+state setLedState(mode led_mode, state led_state, uint8_t intensity, int8_t intensity_set_point) {
 	switch (led_mode) {
+		case MAN:
+				if (intensity > intensity_set_point) {
+					led_state = DOWN;
+				}
+				else if (intensity < intensity_set_point) {
+					led_state = UP;
+				}
+				break;
+
 		case AUTO:
 			if (intensity >= PWM_MAX) {
 				led_state = DOWN;
@@ -294,23 +320,29 @@ state setLedState(mode led_mode, state led_state, uint8_t intensity, uint8_t int
 				led_state = UP;
 			}
 			break;
-
-		case MAN:
-			led_state = (intensity >= intensity_set_point) ? DOWN : UP;
-			break;
 	}
 
 	return led_state;
 }
 
-uint8_t setIntensity(mode led_mode, state led_state, uint8_t intensity, uint8_t intensity_set_point) {
+/* Funkcia nastavuje intenzitu svietenia LED.
+ * Intenzita sa nastaví podľa módu ovládania,
+ * žiadanej hodnoty intenzity a ohraničenia
+ * minimálnej/maximálnej intenzity svietenia.
+ *
+ * Vstupy:
+ * led_mode .............. mód ovládania {MAN, AUTO}
+ * led_state ............. predošlý stav {DOWN, UP}
+ * intensity ............. aktuálna intenzita svietenia
+ * intensity_set_point ... žiadaná hodnota intenzity svietenia */
+uint8_t setIntensity(mode led_mode, state led_state, uint8_t intensity, int8_t intensity_set_point) {
 	if (led_state) {
-		if (led_mode || intensity < intensity_set_point) {
+		if (intensity < PWM_MAX && (led_mode || (intensity_set_point >= 0 && intensity < intensity_set_point))) {
 			intensity += PWM_INCREMENT;
 		}
 	}
 	else {
-		if (led_mode || intensity > intensity_set_point) {
+		if (intensity > PWM_MIN && (led_mode || (intensity_set_point >= 0 && intensity > intensity_set_point))) {
 			intensity -= PWM_INCREMENT;
 		}
 	}
