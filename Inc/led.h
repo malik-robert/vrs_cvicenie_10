@@ -28,8 +28,8 @@ typedef enum {DOWN, UP} state;		// Možné stavy ovládania LED. (DOWN => LED zh
 
 /* USER CODE BEGIN Prototypes */
 void setDutyCycle(uint8_t D);
-state setLedState(mode led_mode, state led_state, uint8_t intensity, uint8_t intensity_set_point);
-uint8_t setIntensity(mode led_mode, state led_state, uint8_t intensity, uint8_t intensity_set_point);
+state setLedState(mode led_mode, state led_state, uint8_t intensity, int8_t intensity_set_point);
+uint8_t setIntensity(mode led_mode, state led_state, uint8_t intensity, int8_t intensity_set_point);
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus
