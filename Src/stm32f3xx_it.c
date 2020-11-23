@@ -304,13 +304,13 @@ void setDutyCycle(uint8_t D) {
 state setLedState(mode led_mode, state led_state, uint8_t intensity, int8_t intensity_set_point) {
 	switch (led_mode) {
 		case MAN:
-				if (intensity > intensity_set_point) {
-					led_state = DOWN;
-				}
-				else if (intensity < intensity_set_point) {
-					led_state = UP;
-				}
-				break;
+			if (intensity > intensity_set_point) {
+				led_state = DOWN;
+			}
+			else if (intensity < intensity_set_point) {
+				led_state = UP;
+			}
+			break;
 
 		case AUTO:
 			if (intensity >= PWM_MAX) {
